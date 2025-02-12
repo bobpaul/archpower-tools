@@ -1,11 +1,33 @@
+FROM --platform=${BUILDPLATFORM} alpine AS builder
+
+ARG KEYRINGURL="https://repo.archlinuxpower.org/base/any/archpower-keyring-20220105-1.1-any.pkg.tar.zst"
+RUN apk add --no-cache bash arch-install-scripts
+RUN cat >> /etc/pacman.conf <<HERE
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Optional
+[base-any]
+Server = https://repo.archlinuxpower.org/base/any
+[base]
+Server = https://repo.archlinuxpower.org/base/\$arch
+HERE
+RUN wget "${KEYRINGURL}" -O /tmp/archpower-keyring.pkg.tar.zst
+RUN cat > /bootstrap.sh <<HERE
+mkdir -p \${1}/var/{lib,cache}/pacman
+export PACMAN_KEYRING_DIR=\${1}/etc/pacman.d/gnupg
+pacman-key --init
+bsdtar --exclude='.*' -xf /tmp/archpower-keyring.pkg.tar.zst -C \${1}
+pacman-key --populate archpower --populate-from \${1}/usr/share/pacman/keyrings
+cp /etc/pacman.conf \${1}/pacman.tmp
+pacman -Sy --noconfirm --config /pacman.tmp --sysroot \${1} --arch \${2} base
+rm \${1}/pacman.tmp
+HERE
+RUN bash /bootstrap.sh /sysroot.ppc64le powerpc64le
+RUN bash /bootstrap.sh /sysroot.ppc64 powerpc64
+RUN bash /bootstrap.sh /sysroot.ppc powerpc
+RUN bash /bootstrap.sh /sysroot.riscv64 riscv64
+
 FROM scratch
+ARG TARGETARCH
 MAINTAINER Alexander Baldeck <alex.bldck@gmail.com>
 
-COPY ./sysroot/ .
-
-RUN pacman-key --init && pacman-key --populate archlinux
-RUN pacman --noconfirm -Scc && rm -rf /var/lib/pacman/base*
-RUN source /etc/profile && \
-    sed 's@#en_US.UTF-8 UTF-8@en_US.UTF-8 UTF-8@g' -i /etc/locale.gen && \
-    locale-gen && \
-    echo 'LANG=en_US.UTF-8' > /etc/locale.conf 
+COPY --from=builder /sysroot.${TARGETARCH}/ /
