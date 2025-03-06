@@ -31,3 +31,5 @@ ARG TARGETARCH
 MAINTAINER Alexander Baldeck <alex.bldck@gmail.com>
 
 COPY --from=builder /sysroot.${TARGETARCH}/ /
+RUN pacman -Sy --noconfirm archpower-keyring --overwrite '/usr/share/pacman/keyrings/*' \
+          && pacman -Scc
